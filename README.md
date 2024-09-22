@@ -1,5 +1,5 @@
 # TIMED2812
-Raspberry PI 5 very basic C++ code to interact with WS2812 on normal GPIO through RP1 chip and the use of basic timers.
+Raspberry PI 5 very basic C++ code to interact with WS2812B LED on normal GPIO through RP1 chip and the use of basic timers.
 
 Timers are adjusted through the use of an oscilloscope to match measured times.
 Code seems more stable than I expected.
