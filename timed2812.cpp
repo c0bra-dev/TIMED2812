@@ -1,15 +1,15 @@
 /* #############################################################
 
-timed2812.cpp version 0.1
+timed2812.cpp version 0.2
 
         Purpose(s) of this version
-				Drive WS2812B LED with Raspberry PI 5
-                Test I_O speed and capabilities 
+        	Multiple LEDs support
+                Increase stability
         Changelog
                 N.A.
         Requirements
                 Raspberry PI 5
-                WS2812B chip connected to Raspberry PI
+                24 WS2812B chip connected to Raspberry PI
 
 c0bra software - 22-09-2024
 
@@ -22,12 +22,18 @@ c0bra software - 22-09-2024
 #include <unistd.h>
 
 #define LED_PIN 1  // WiringPi pin 1 (GPIO18)
-#define T1H 680    // Ideal time 800 
+#define T1H 680    // Ideal time 800
 #define T1L 310    // Ideal time 450
 #define T0H 300    // Ideal time 400
 #define T0L 750    // Ideal time 850
-#define TCOMP 3500 // RP1 wake up time in nanoseconds
-#define RESET_TIME 50000  // Reset time in microseconds
+#define TCOMP 5000 // RP1 wake up time in nanoseconds
+#define RESET_TIME 50  // Reset time in microseconds
+#define LED_NUMBER 24  // Number of LEDs
+#define RAINBOW_DELAY 500 // 50ms delay between updates
+
+
+uint32_t color_matrix[LED_NUMBER];
+uint32_t colorWheel(uint8_t pos);
 
 class Timer {
 public:
@@ -46,7 +52,8 @@ private:
 
 Timer timer;
 void sendBit(bool bit);
-void sendColor(uint32_t color);
+void sendColors(uint32_t* colors);
+uint32_t colorWheel(uint8_t pos);
 
 
 int main() {
@@ -57,20 +64,15 @@ int main() {
     }
     pinMode(LED_PIN, OUTPUT);
 
-   while (true) {
-        // Send color data to WS2812B (for example, red color)
-        sendColor(0xFF0000);  // Red
-        usleep(500000);  // 500ms delay
 
-        sendColor(0x00FF00);  // Green
-        usleep(500000);  // 500ms delay
-
-        sendColor(0x0000FF);  // Blue
-        usleep(500000);  // 500ms delay
-
-        sendColor(0x000000);  // Off
-        usleep(500000);  // 500ms delay
-
+    uint8_t colorPos = 0;
+    while (true) {
+        for (int i = 0; i < LED_NUMBER; i++) {
+            color_matrix[i] = colorWheel((colorPos + (i * 256 / LED_NUMBER)) & 255);
+        }
+        sendColors(color_matrix);
+        colorPos++;
+        usleep(RAINBOW_DELAY); // Delay for the rainbow effect
     }
     return 0;
 }
@@ -81,7 +83,7 @@ void sendBit(bool bit) {
         // Send '1'
         digitalWrite(LED_PIN, HIGH);
         timer.start();
-        while (timer.elapsed() < T1H); // High time for '1' 
+        while (timer.elapsed() < T1H); // High time for '1'
         digitalWrite(LED_PIN, LOW);
         timer.start();
         while (timer.elapsed() < T1L); // Low time for '1'
@@ -97,17 +99,31 @@ void sendBit(bool bit) {
 }
 
 
-
-void sendColor(uint32_t color) {
-
-    digitalWrite(LED_PIN, HIGH);
+void sendColors(uint32_t *colors) {
+    digitalWrite(LED_PIN, HIGH);     // Changed the way WAKEUP occurs. Now a single 20ns pulse get generated, then we wait. 
+    digitalWrite(LED_PIN, LOW);	     //  This pulse is so fast it gets ignored by the WS2812B and ensure accurate timings.
     timer.start();
     while (timer.elapsed() < TCOMP); // Wait for the RP1 to wake up before sending data
 
-    for (int i = 23; i >= 0; i--) {
-        sendBit((color >> i) & 1);
+    for (int j = 0; j < LED_NUMBER; j++) {
+        for (int i = 23; i >= 0; i--) {
+            sendBit((colors[j] >> i) & 1);
+        }
     }
 
     // Ensure reset time
     usleep(RESET_TIME);
+}
+
+uint32_t colorWheel(uint8_t pos) {
+    pos = 255 - pos;
+    if (pos < 85) {
+        return ((255 - pos * 3) << 16) | (0 << 8) | (pos * 3);
+    }
+    if (pos < 170) {
+        pos -= 85;
+        return ((0 << 16) | ((pos * 3) << 8) | (255 - pos * 3));
+    }
+    pos -= 170;
+    return (((pos * 3) << 16) | ((255 - pos * 3) << 8) | 0);
 }
